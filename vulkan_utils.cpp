@@ -176,3 +176,176 @@ bool loadInstanceLevelFunctions(VkInstance instance, std::vector<char const *> c
 
     return true;
 }
+
+bool checkAvailableDeviceExtensions(VkPhysicalDevice physical_device, std::vector<VkExtensionProperties> &available_extensions)
+{
+    uint32_t extensions_count;
+    VkResult result = vkEnumerateDeviceExtensionProperties(physical_device, nullptr, &extensions_count, nullptr);
+    if ((result != VK_SUCCESS) ||
+        (extensions_count == 0))
+    {
+        std::cout << "Could not get the number of device extensions." << std::endl;
+        return false;
+    }
+
+    available_extensions.resize(extensions_count);
+    result = vkEnumerateDeviceExtensionProperties(physical_device, nullptr, &extensions_count, available_extensions.data());
+    if ((result != VK_SUCCESS) ||
+        (extensions_count == 0))
+    {
+        std::cout << "Could not enumerate device extensions." << std::endl;
+        return false;
+    }
+    return true;
+}
+
+bool enumerateAvailablePhysicalDevices(VkInstance instance, std::vector<VkPhysicalDevice> &available_devices)
+{
+    uint32_t devices_count;
+    VkResult result = vkEnumeratePhysicalDevices(instance, &devices_count, nullptr);
+    if ((result != VK_SUCCESS) ||
+        (devices_count == 0))
+    {
+        std::cout << "Could not get the number of available physical devices." << std::endl;
+        return false;
+    }
+    available_devices.resize(devices_count);
+    result = vkEnumeratePhysicalDevices(instance, &devices_count, available_devices.data());
+    if ((result != VK_SUCCESS) ||
+        (devices_count == 0))
+    {
+        std::cout << "Could not enumerate physical devices." << std::endl;
+        return false;
+    }
+    return true;
+}
+void getFeaturesAndPropertiesOfPhysicalDevice(VkPhysicalDevice physical_device, VkPhysicalDeviceFeatures &device_features, VkPhysicalDeviceProperties &device_properties)
+{
+    vkGetPhysicalDeviceFeatures(physical_device, &device_features);
+    vkGetPhysicalDeviceProperties(physical_device, &device_properties);
+}
+bool checkAvailableQueueFamiliesAndProperties(VkPhysicalDevice physical_device, std::vector<VkQueueFamilyProperties> &queue_families)
+{
+    uint32_t queue_families_count;
+    vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_families_count, nullptr);
+    if (queue_families_count == 0)
+    {
+        std::cout << "Could not get the number of queue families." << std::endl;
+        return false;
+    }
+    queue_families.resize(queue_families_count);
+    vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_families_count, queue_families.data());
+    if (queue_families_count == 0)
+    {
+        std::cout << "Could not acquire properties of queue families." << std::endl;
+        return false;
+    }
+
+    return true;
+}
+bool getIndexOfQueueFamily(VkPhysicalDevice physical_device, VkQueueFlags desired_capabilities, uint32_t &queue_family_index)
+{
+    std::vector<VkQueueFamilyProperties> queue_families;
+    if (!checkAvailableQueueFamiliesAndProperties(physical_device, queue_families))
+    {
+        return false;
+    }
+    queue_family_index = 0;
+    for (auto family : queue_families)
+    {
+        if ((family.queueCount > 0) &&
+            ((family.queueFlags & desired_capabilities) == desired_capabilities))
+        {
+            return true;
+        }
+        queue_family_index++;
+    }
+    return true;
+}
+bool createLogicalDevice(VkPhysicalDevice physical_device, std::vector<QueueInfo> queue_infos, std::vector<char const *> const &desired_extensions, VkPhysicalDeviceFeatures *desired_features, VkDevice &logical_device)
+{
+    std::vector<VkExtensionProperties> available_extensions;
+    if (!checkAvailableDeviceExtensions(physical_device, available_extensions))
+    {
+        return false;
+    }
+    for (auto extension : desired_extensions)
+    {
+        if (!isExtensionSupported(available_extensions, extension))
+        {
+            std::cout << "Extension named '" << extension << "' is not supported by a physical device." << std::endl;
+            return false;
+        }
+    }
+
+    std::vector<VkDeviceQueueCreateInfo> queue_create_infos;
+
+    for (auto &info : queue_infos)
+    {
+        queue_create_infos.push_back({
+            //译者注
+            VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,                //sType
+            nullptr,                                                   //pNext
+            0,                                                         //flags
+            info.FamilyIndex,                                          //queueFamilyIndex
+            static_cast<uint32_t>(info.Priorities.size()),             //queueCount
+            info.Priorities.size() > 0 ? &info.Priorities[0] : nullptr //pQueuePriorities
+        });
+    };
+
+    VkDeviceCreateInfo device_create_info = {
+        //译者注
+        VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,                             //sType
+        nullptr,                                                          //pNext
+        0,                                                                //flags
+        static_cast<uint32_t>(queue_create_infos.size()),                 //queueCreateInfoCount
+        queue_create_infos.size() > 0 ? &queue_create_infos[0] : nullptr, //pQueueCreateInfos
+        0,                                                                //enabledLayerCount
+        nullptr,                                                          //ppEnabledLayerNames
+        static_cast<uint32_t>(desired_extensions.size()),                 //enabledExtensionCount
+        desired_extensions.size() > 0 ? &desired_extensions[0] : nullptr, //ppEnabledExtensionNames
+        desired_features                                                  //pEnabledFeatures
+    };
+
+    VkResult result = vkCreateDevice(physical_device, &device_create_info, nullptr, &logical_device);
+    if ((result != VK_SUCCESS) || (logical_device == VK_NULL_HANDLE))
+    {
+        std::cout << "Could not create logical device." << std::endl;
+        return false;
+    }
+
+    return true;
+}
+bool loadDeviceLevelFunctions(VkDevice logical_device, std::vector<char const *> const &enabled_extensions)
+{
+#define DEVICE_LEVEL_VULKAN_FUNCTION(name)                                                     \
+    name = (PFN_##name)vkGetDeviceProcAddr(logical_device, #name);                             \
+    if (name == nullptr)                                                                       \
+    {                                                                                          \
+        std::cout << "Could not load device-level Vulkan function named: " #name << std::endl; \
+        return false;                                                                          \
+    }
+
+#include "vulkan_utils.conf"
+
+#define DEVICE_LEVEL_VULKAN_FUNCTION_FROM_EXTENSION(name, extension)                                   \
+    for (auto &enabled_extension : enabled_extensions)                                                 \
+    {                                                                                                  \
+        if (std::string(enabled_extension) == std::string(extension))                                  \
+        {                                                                                              \
+            name = (PFN_##name)vkGetDeviceProcAddr(logical_device, #name);                             \
+            if (name == nullptr)                                                                       \
+            {                                                                                          \
+                std::cout << "Could not load device-level Vulkan function named: " #name << std::endl; \
+                return false;                                                                          \
+            }                                                                                          \
+        }                                                                                              \
+    }
+
+    return true;
+}
+
+void getDeviceQueue(VkDevice logical_device, uint32_t queue_family_index, uint32_t queue_index, VkQueue &queue)
+{
+    vkGetDeviceQueue(logical_device, queue_family_index, queue_index, &queue);
+}
