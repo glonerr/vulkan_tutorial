@@ -54,7 +54,7 @@ int main(void)
     }
     for (auto extension : available_extensions)
     {
-        std::cout << extension.extensionName << std::endl;
+        puts(extension.extensionName);
     }
     VkPhysicalDeviceFeatures device_feature;
     VkPhysicalDeviceProperties device_properties;
@@ -87,7 +87,7 @@ int main(void)
         puts("call createLogicalDevice success!");
     }
 
-    loadDeviceLevelFunctions(logical_device,desired_extensions);
+    loadDeviceLevelFunctions(logical_device, desired_extensions);
     VkQueue queue;
     getDeviceQueue(logical_device, queue_family_index, 0, queue);
     exit(EXIT_SUCCESS);

@@ -27,6 +27,7 @@ bool checkAvailableDeviceExtensions(VkPhysicalDevice physical_device, std::vecto
 bool checkAvailableQueueFamiliesAndProperties(VkPhysicalDevice physical_device, std::vector<VkQueueFamilyProperties> &queue_families);
 bool createVulkanInstance(std::vector<char const *> const &desired_extensions, char const *const application_name, VkInstance &instance);
 bool createLogicalDevice(VkPhysicalDevice physical_device, std::vector<QueueInfo> queue_infos, std::vector<char const *> const &desired_extensions, VkPhysicalDeviceFeatures *desired_features, VkDevice &logical_device);
+bool createPresentationSurface(VkInstance instance);
 bool isExtensionSupported(std::vector<VkExtensionProperties> const &available_extensions, char const *const extension);
 bool enumerateAvailablePhysicalDevices(VkInstance instance, std::vector<VkPhysicalDevice> &available_devices);
 void getDeviceQueue(VkDevice logical_device,uint32_t queue_family_index,uint32_t queue_index,VkQueue &queue);
