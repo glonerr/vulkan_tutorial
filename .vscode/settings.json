@@ -49,6 +49,13 @@
         "streambuf": "cpp",
         "thread": "cpp",
         "cinttypes": "cpp",
-        "*.conf": "cpp"
+        "*.conf": "cpp",
+        "string.h": "c",
+        "stdio.h": "c",
+        "cerrno": "cpp",
+        "iomanip": "cpp",
+        "ios": "cpp",
+        "locale": "cpp",
+        "queue": "cpp"
     }
 }
