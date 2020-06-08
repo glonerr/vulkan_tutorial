@@ -6,6 +6,7 @@
     "configurations": [
 
 
+
         {
             "name": "(gdb) Launch",
             "type": "cppdbg",
@@ -16,7 +17,7 @@
             "cwd": "${workspaceFolder}",
             "environment": [],
             "externalConsole": false,
-            // "preLaunchTask": "build",
+            "preLaunchTask": "build",
             "MIMode": "gdb",
             "setupCommands": [
                 {

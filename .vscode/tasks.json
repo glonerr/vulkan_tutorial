@@ -52,14 +52,8 @@
     {
       "type": "shell",
       "label": "build",
-      "command": "/usr/bin/clang++",
+      "command": "cd ${workspaceFolder}/build && rm -rf ${workspaceFolder}/build/* && cmake ../ && make",
       "args": [
-        "-g",
-        "${workspaceFolder}/main.cpp",
-        "${workspaceFolder}/Renderer.cpp",
-        "-lvulkan",
-        "-o",
-        "${workspaceFolder}/a.out"
       ],
       "options": {
         "cwd": "/usr/bin"

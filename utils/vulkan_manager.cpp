@@ -176,9 +176,392 @@ void create_vulkan_swapchain(struct window_info &info)
     VkBool32 *pSupportsPresent = (VkBool32 *)malloc(queueFamilyCount * sizeof(VkBool32));
     for (size_t i = 0; i < queueFamilyCount; i++)
     {
-        /* code */
+        vkGetPhysicalDeviceSurfaceSupportKHR(gpus[0], i, surface, &pSupportsPresent[i]);
+        printf("队列家族索引=%ld %s显示\n", i, pSupportsPresent[i] == 1 ? "支持" : "不支持");
     }
-    
+    queueGraphicsFamilyIndex = UINT32_MAX;
+    queuePresentFamilyIndex = UINT32_MAX;
+    for (size_t i = 0; i < queueFamilyCount; i++)
+    {
+        if ((queueFamilyProps[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0)
+        {
+            if (queueGraphicsFamilyIndex == UINT32_MAX)
+            {
+                queueGraphicsFamilyIndex = i;
+            }
+            if (pSupportsPresent[i] == VK_TRUE)
+            {
+                queueGraphicsFamilyIndex = i;
+                queuePresentFamilyIndex = i;
+                printf("队列家族索引=%ld同时支持Graphcs(图形)和Present(呈现)工作\n", i);
+                break;
+            }
+        }
+    }
+    if (queuePresentFamilyIndex == UINT32_MAX)
+    {
+        for (size_t i = 0; i < queueFamilyCount; i++)
+        {
+            if (pSupportsPresent[i] == VK_TRUE)
+            {
+                queuePresentFamilyIndex = i;
+                break;
+            }
+        }
+    }
+    free(pSupportsPresent);
+    if (queueGraphicsFamilyIndex == UINT32_MAX || queuePresentFamilyIndex == UINT32_MAX)
+    {
+        printf("没有找到支持Graphics(图形)或者Present(呈现或显示)工作的队列家族\n");
+        assert(false);
+    }
+
+    uint32_t formatCount;
+    result = vkGetPhysicalDeviceSurfaceFormatsKHR(gpus[0], surface, &formatCount, NULL);
+    printf("物理设备表面格式种类:%d\n", formatCount);
+    formats.resize(formatCount);
+    VkSurfaceFormatKHR *surfFormats = (VkSurfaceFormatKHR *)malloc(sizeof(VkSurfaceFormatKHR) * formatCount);
+    result = vkGetPhysicalDeviceSurfaceFormatsKHR(gpus[0], surface, &formatCount, surfFormats);
+    for (size_t i = 0; i < formatCount; i++)
+    {
+        formats[i] = surfFormats[i].format;
+        printf("支持的格式为:%d\n", formats[i]);
+    }
+    if (formatCount == 1 && formats[0] == VK_FORMAT_UNDEFINED)
+    {
+        formats[0] = VK_FORMAT_B8G8R8A8_UNORM;
+    }
+    free(surfFormats);
+    result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(gpus[0], surface, &surfCapabilities);
+    printf("最小图像数:%d 最大图像数:%d\n", surfCapabilities.minImageCount, surfCapabilities.maxImageCount);
+    assert(result == VK_SUCCESS);
+    result = vkGetPhysicalDeviceSurfacePresentModesKHR(gpus[0], surface, &presentModeCount, NULL);
+    printf("显示方式数量:%d\n", presentModeCount);
+    presentModes.resize(presentModeCount);
+    result = vkGetPhysicalDeviceSurfacePresentModesKHR(gpus[0], surface, &presentModeCount, presentModes.data());
+    VkPresentModeKHR swapchainPresentMode = VK_PRESENT_MODE_FIFO_KHR;
+    for (size_t i = 0; i < presentModeCount; i++)
+    {
+        if (presentModes[i] == VK_PRESENT_MODE_MAILBOX_KHR)
+        {
+            swapchainPresentMode = VK_PRESENT_MODE_MAILBOX_KHR;
+            break;
+        }
+        if (presentModes[i] == VK_PRESENT_MODE_IMMEDIATE_KHR)
+        {
+            swapchainPresentMode = VK_PRESENT_MODE_IMMEDIATE_KHR;
+        }
+    }
+    if (surfCapabilities.currentExtent.width == 0xFFFFFFFF)
+    {
+        swapchainExtent.width = screenWidth;
+        swapchainExtent.height = screenHeight;
+        if (swapchainExtent.width < surfCapabilities.minImageExtent.width)
+        {
+            swapchainExtent.width = surfCapabilities.minImageExtent.width;
+        }
+        else if (swapchainExtent.width > surfCapabilities.maxImageExtent.width)
+        {
+            swapchainExtent.width = surfCapabilities.maxImageExtent.width;
+        }
+
+        if (swapchainExtent.height < surfCapabilities.minImageExtent.height)
+        {
+            swapchainExtent.height = surfCapabilities.minImageExtent.height;
+        }
+        else if (swapchainExtent.height > surfCapabilities.maxImageExtent.height)
+        {
+            swapchainExtent.height = surfCapabilities.maxImageExtent.height;
+        }
+        printf("使用自己设置的宽度 %d 高度 %d\n", swapchainExtent.width, swapchainExtent.height);
+    }
+    else
+    {
+        swapchainExtent = surfCapabilities.currentExtent;
+        printf("使用获取能力中的宽度 %d 高度 %d\n", swapchainExtent.width, swapchainExtent.height);
+    }
+    screenWidth = swapchainExtent.width;
+    screenHeight = swapchainExtent.height;
+    uint32_t desiredMinNumberOfSwachainImages = surfCapabilities.minImageCount + 1;
+    if ((surfCapabilities.maxImageCount > 0) && desiredMinNumberOfSwachainImages > surfCapabilities.maxImageCount)
+    {
+        desiredMinNumberOfSwachainImages = surfCapabilities.maxImageCount;
+    }
+    VkSurfaceTransformFlagBitsKHR preTransform;
+    if (surfCapabilities.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR)
+    {
+        preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+    }
+    else
+    {
+        preTransform = surfCapabilities.currentTransform;
+    }
+    VkSwapchainCreateInfoKHR swapchain_ci = {};
+    swapchain_ci.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+    swapchain_ci.pNext = NULL;
+    swapchain_ci.surface = surface;
+    swapchain_ci.minImageCount = desiredMinNumberOfSwachainImages;
+    swapchain_ci.imageFormat = formats[0];
+    swapchain_ci.imageExtent.width = swapchainExtent.width;
+    swapchain_ci.imageExtent.height = swapchainExtent.height;
+    swapchain_ci.preTransform = preTransform;
+    swapchain_ci.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    swapchain_ci.imageArrayLayers = 1;
+    swapchain_ci.presentMode = swapchainPresentMode;
+    swapchain_ci.oldSwapchain = VK_NULL_HANDLE;
+    swapchain_ci.clipped = true;
+    swapchain_ci.imageColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
+    swapchain_ci.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    swapchain_ci.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    swapchain_ci.queueFamilyIndexCount = 0;
+    swapchain_ci.pQueueFamilyIndices = NULL;
+    if (queueGraphicsFamilyIndex != queuePresentFamilyIndex)
+    {
+        swapchain_ci.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+        swapchain_ci.queueFamilyIndexCount = 2;
+        uint32_t queueFamilyIndics[2] = {queueGraphicsFamilyIndex, queuePresentFamilyIndex};
+        swapchain_ci.pQueueFamilyIndices = queueFamilyIndics;
+    }
+    result = vkCreateSwapchainKHR(device, &swapchain_ci, NULL, &swapChain);
+    assert(result == VK_SUCCESS);
+    result = vkGetSwapchainImagesKHR(device, swapChain, &swapchainImageCount, NULL);
+    assert(result == VK_SUCCESS);
+    printf("交换链图像数量:%d\n", swapchainImageCount);
+    swapchainImages.resize(swapchainImageCount);
+    result = vkGetSwapchainImagesKHR(device, swapChain, &swapchainImageCount, swapchainImages.data());
+    printf("交换链图像单张大小:%ld\n", sizeof(swapchainImages[0]));
+    assert(result == VK_SUCCESS);
+    swapchainImageViews.resize(swapchainImageCount);
+    for (size_t i = 0; i < swapchainImageCount; i++)
+    {
+        VkImageViewCreateInfo image_view_ci = {};
+        image_view_ci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        image_view_ci.pNext = NULL;
+        image_view_ci.flags = 0;
+        image_view_ci.image = swapchainImages[i];
+        image_view_ci.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        image_view_ci.format = formats[0];
+        image_view_ci.components.r = VK_COMPONENT_SWIZZLE_R;
+        image_view_ci.components.g = VK_COMPONENT_SWIZZLE_G;
+        image_view_ci.components.b = VK_COMPONENT_SWIZZLE_B;
+        image_view_ci.components.a = VK_COMPONENT_SWIZZLE_A;
+        image_view_ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        image_view_ci.subresourceRange.baseMipLevel = 0;
+        image_view_ci.subresourceRange.layerCount = 1;
+        image_view_ci.subresourceRange.baseArrayLayer = 0;
+        image_view_ci.subresourceRange.layerCount = 1;
+        result = vkCreateImageView(device, &image_view_ci, NULL, &swapchainImageViews[i]);
+        assert(result == VK_SUCCESS);
+    }
+}
+
+bool memoryTypeFromProperties(VkPhysicalDeviceMemoryProperties &memoryProperties, uint32_t typeBits, VkFlags requirements_mask, uint32_t *typeIndex)
+{
+    for (uint32_t i = 0; i < 32; i++)
+    {
+        if ((typeBits & 1) == 1)
+        {
+            if ((memoryProperties.memoryTypes[i].propertyFlags & requirements_mask) == requirements_mask)
+            {
+                *typeIndex = i;
+                return true;
+            }
+        }
+        typeBits >>= 1;
+    }
+    return false;
+}
+
+void create_vulkan_DepthBuffer()
+{
+    depthFormat = VK_FORMAT_D16_UNORM;
+    VkImageCreateInfo image_ci = {};
+    vkGetPhysicalDeviceFormatProperties(gpus[0], depthFormat, &depthFormatProps);
+    if (depthFormatProps.linearTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT)
+    {
+        image_ci.tiling = VK_IMAGE_TILING_LINEAR;
+        printf("tiling为VK_IMAGE_TILING_LINEAR!\n");
+    }
+    else if (depthFormatProps.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT)
+    {
+        image_ci.tiling = VK_IMAGE_TILING_OPTIMAL;
+        printf("tiling为VK_IMAGE_TILING_OPTIMAL!\n");
+    }
+    else
+    {
+        printf("不支持VK_FORMAT_D16_UNORM!\n");
+    }
+    image_ci.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    image_ci.pNext = NULL;
+    image_ci.imageType = VK_IMAGE_TYPE_2D;
+    image_ci.format = depthFormat;
+    image_ci.extent.width = screenWidth;
+    image_ci.extent.height = screenHeight;
+    image_ci.extent.depth = 1;
+    image_ci.mipLevels = 1;
+    image_ci.arrayLayers = 1;
+    image_ci.samples = VK_SAMPLE_COUNT_1_BIT;
+    image_ci.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    image_ci.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    image_ci.queueFamilyIndexCount = 0;
+    image_ci.pQueueFamilyIndices = NULL;
+    image_ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    image_ci.flags = 0;
+
+    VkMemoryAllocateInfo mem_alloc_info = {};
+    mem_alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    mem_alloc_info.pNext = NULL;
+    mem_alloc_info.allocationSize = 0;
+    mem_alloc_info.memoryTypeIndex = 0;
+
+    VkImageViewCreateInfo depth_view_ci = {};
+    depth_view_ci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    depth_view_ci.pNext = NULL;
+    depth_view_ci.image = VK_NULL_HANDLE;
+    depth_view_ci.format = depthFormat;
+    depth_view_ci.components.r = VK_COMPONENT_SWIZZLE_R;
+    depth_view_ci.components.g = VK_COMPONENT_SWIZZLE_G;
+    depth_view_ci.components.b = VK_COMPONENT_SWIZZLE_B;
+    depth_view_ci.components.a = VK_COMPONENT_SWIZZLE_A;
+    depth_view_ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    depth_view_ci.subresourceRange.baseMipLevel = 0;
+    depth_view_ci.subresourceRange.levelCount = 1;
+    depth_view_ci.subresourceRange.baseArrayLayer = 0;
+    depth_view_ci.subresourceRange.layerCount = 1;
+    depth_view_ci.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    depth_view_ci.flags = 0;
+    VkResult result = vkCreateImage(device, &image_ci, NULL, &depthImage);
+    assert(result == VK_SUCCESS);
+    VkMemoryRequirements mem_reqs;
+    vkGetImageMemoryRequirements(device, depthImage, &mem_reqs);
+    mem_alloc_info.allocationSize = mem_reqs.size;
+    VkFlags requirements_mask = 0;
+    bool flag = memoryTypeFromProperties(memoryproperties, mem_reqs.memoryTypeBits, requirements_mask, &mem_alloc_info.memoryTypeIndex);
+    assert(flag);
+    printf("确定内存类型成功类型索引为%d\n", mem_alloc_info.memoryTypeIndex);
+    result = vkAllocateMemory(device, &mem_alloc_info, NULL, &memDepth);
+    assert(result == VK_SUCCESS);
+    result = vkBindImageMemory(device, depthImage, memDepth, 0);
+    assert(result == VK_SUCCESS);
+    depth_view_ci.image = depthImage;
+    result = vkCreateImageView(device, &depth_view_ci, NULL, &depthImageView);
+    assert(result == VK_SUCCESS);
+}
+
+void create_render_pass()
+{
+    VkSemaphoreCreateInfo semaphore_ci = {};
+    semaphore_ci.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO; // image required semaphore
+    semaphore_ci.pNext = NULL;
+    semaphore_ci.flags = 0;
+    VkResult result = vkCreateSemaphore(device, &semaphore_ci, NULL, &imageAcquiredSemaphore);
+    assert(result == VK_SUCCESS);
+    VkAttachmentDescription attachments_desc[2];
+    attachments_desc[0].format = formats[0];
+    attachments_desc[0].samples = VK_SAMPLE_COUNT_1_BIT;
+    attachments_desc[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;              // color attachment
+    attachments_desc[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;            // color attachment
+    attachments_desc[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;   // template attachment
+    attachments_desc[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; // template attachment
+    attachments_desc[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    attachments_desc[0].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    attachments_desc[0].flags = 0;
+
+    attachments_desc[1].format = depthFormat;
+    attachments_desc[1].samples = VK_SAMPLE_COUNT_1_BIT;
+    attachments_desc[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    attachments_desc[1].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    attachments_desc[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    attachments_desc[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    attachments_desc[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    attachments_desc[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    attachments_desc[1].flags = 0;
+
+    VkAttachmentReference color_reference = {};
+    color_reference.attachment = 0;
+    color_reference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+    VkAttachmentReference depth_reference = {};
+    depth_reference.attachment = 1;
+    depth_reference.layout = VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL;
+
+    VkSubpassDescription subpass_desc = {};
+    subpass_desc.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpass_desc.flags = 0;
+    subpass_desc.inputAttachmentCount = 0;
+    subpass_desc.pInputAttachments = NULL;
+    subpass_desc.colorAttachmentCount = 1;
+    subpass_desc.pColorAttachments = &color_reference;
+    subpass_desc.pResolveAttachments = NULL;
+    subpass_desc.pDepthStencilAttachment = &depth_reference;
+    subpass_desc.preserveAttachmentCount = 0;
+    subpass_desc.pResolveAttachments = NULL;
+
+    VkRenderPassCreateInfo render_pass_ci = {};
+    render_pass_ci.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    render_pass_ci.pNext = NULL;
+    render_pass_ci.attachmentCount = 2;
+    render_pass_ci.pAttachments = attachments_desc;
+    render_pass_ci.subpassCount = 1;
+    render_pass_ci.pSubpasses = &subpass_desc;
+    render_pass_ci.dependencyCount = 0;
+    render_pass_ci.pDependencies = NULL;
+
+    result = vkCreateRenderPass(device, &render_pass_ci, NULL, &renderPass);
+    assert(result == VK_SUCCESS);
+
+    clear_values[0].color.float32[0] = 0.2f;
+    clear_values[0].color.float32[1] = 0.2f;
+    clear_values[0].color.float32[2] = 0.2f;
+    clear_values[0].color.float32[3] = 0.2f;
+
+    clear_values[1].depthStencil.depth = 1.0f;
+    clear_values[1].depthStencil.stencil = 0;
+
+    rp_begin_ci.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    rp_begin_ci.pNext = NULL;
+    rp_begin_ci.renderPass = renderPass;
+    rp_begin_ci.renderArea.offset.x = 0;
+    rp_begin_ci.renderArea.offset.y = 0;
+    rp_begin_ci.renderArea.extent.width = screenWidth;
+    rp_begin_ci.renderArea.extent.height = screenHeight;
+    rp_begin_ci.clearValueCount = 2;
+    rp_begin_ci.pClearValues = clear_values;
+}
+
+void create_frame_buffer()
+{
+    VkImageView attachments_iv[2];
+    attachments_iv[1] = depthImageView;
+    VkFramebufferCreateInfo frame_buffer_ci = {};
+    frame_buffer_ci.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+    frame_buffer_ci.pNext = NULL;
+    frame_buffer_ci.renderPass = renderPass;
+    frame_buffer_ci.attachmentCount = 2;
+    frame_buffer_ci.pAttachments = attachments_iv;
+    frame_buffer_ci.width = screenWidth;
+    frame_buffer_ci.height = screenHeight;
+    frame_buffer_ci.layers = 1;
+    framebuffers = (VkFramebuffer *)malloc(swapchainImageCount * sizeof(VkFramebuffer));
+    assert(framebuffers);
+    for (size_t i = 0; i < swapchainImageCount; i++)
+    {
+        attachments_iv[0] = swapchainImageViews[i];
+        VkResult result = vkCreateFramebuffer(device, &frame_buffer_ci, NULL, &framebuffers[i]);
+        assert(result == VK_SUCCESS);
+        printf("创建帧缓冲%ld成功\n", i);
+    }
+}
+
+void createDrawableObject()
+{
+    int vCount = 3;
+    int dataByteCount = vCount * 6 * sizeof(float);
+    float *vdata = new float[vCount * 6]{
+        0, 75, 0, 1, 0, 0,
+        -45, 0, 0, 0, 1, 0,
+        45, 0, 0, 0, 0, 1};
+    drawable = new DrawableObject(vdata, dataByteCount, vCount, device, memoryproperties);
 }
 
 #ifdef _WIN32

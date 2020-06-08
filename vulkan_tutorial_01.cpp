@@ -13,7 +13,11 @@ int main()
     create_vulkan_device();
     create_vulkan_CommandBuffer();
     init_queue();
-    create_vulkan_swapchain();
+    create_vulkan_swapchain(info);
+    create_vulkan_DepthBuffer();
+    create_render_pass();
+    create_frame_buffer();
+    createDrawableObject();
 
     // close connection to server
     xcb_disconnect(info.connection);

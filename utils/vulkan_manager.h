@@ -1,6 +1,7 @@
 #ifndef VULKAN_MANAGER_H
 #define VULKAN_MANAGER_H
 #include "vulkan_wrapper.h" //for android and unix etc most platform
+#include "drawable_object.h"
 
 #include <vector>
 
@@ -94,11 +95,13 @@ VkSemaphore imageAcquiredSemaphore;
 uint32_t currentBuffer;
 VkRenderPass renderPass;
 VkClearValue clear_values[2];
-VkRenderPassBeginInfo rp_begin;
+VkRenderPassBeginInfo rp_begin_ci;
 VkFence taskFinishFench;
 VkPresentInfoKHR present;
 VkFramebuffer *framebuffers;
 float xAngle;
+
+DrawableObject *drawable;
 
 void init_window_size(struct window_info &info, int32_t default_width, int32_t default_height);
 void init_window(struct window_info &info);
@@ -110,7 +113,7 @@ void enumerate_vulkan_phy_device();
 void create_vulkan_device();
 void create_vulkan_CommandBuffer();
 void init_queue();
-void create_vulkan_swapchain();
+void create_vulkan_swapchain(struct window_info &info);
 void create_vulkan_DepthBuffer();
 void create_render_pass();
 void create_frame_buffer();
