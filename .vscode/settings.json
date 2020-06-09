@@ -75,5 +75,6 @@
         "variant": "cpp",
         "bit": "cpp",
         "*.ipp": "cpp"
-    }
+    },
+    "C_Cpp.errorSquiggles": "Enabled"
 }

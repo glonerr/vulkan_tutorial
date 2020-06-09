@@ -1,7 +1,8 @@
 #ifndef VULKAN_MANAGER_H
 #define VULKAN_MANAGER_H
-#include "vulkan_wrapper.h" //for android and unix etc most platform
+#include "vulkan_wrapper.h" //for android a
 #include "drawable_object.h"
+#include "shader_queue_suit.h"
 
 #include <vector>
 
@@ -102,6 +103,7 @@ VkFramebuffer *framebuffers;
 float xAngle;
 
 DrawableObject *drawable;
+ShaderQueueSuit *sqsCL;
 
 void init_window_size(struct window_info &info, int32_t default_width, int32_t default_height);
 void init_window(struct window_info &info);

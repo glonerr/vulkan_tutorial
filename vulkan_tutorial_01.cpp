@@ -18,6 +18,7 @@ int main()
     create_render_pass();
     create_frame_buffer();
     createDrawableObject();
+    initPipeline();
 
     // close connection to server
     xcb_disconnect(info.connection);

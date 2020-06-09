@@ -1,4 +1,5 @@
 #include "vulkan_manager.h"
+#include "utils.h"
 #include <stdio.h>
 #include <assert.h>
 #include <stdlib.h>
@@ -355,23 +356,6 @@ void create_vulkan_swapchain(struct window_info &info)
     }
 }
 
-bool memoryTypeFromProperties(VkPhysicalDeviceMemoryProperties &memoryProperties, uint32_t typeBits, VkFlags requirements_mask, uint32_t *typeIndex)
-{
-    for (uint32_t i = 0; i < 32; i++)
-    {
-        if ((typeBits & 1) == 1)
-        {
-            if ((memoryProperties.memoryTypes[i].propertyFlags & requirements_mask) == requirements_mask)
-            {
-                *typeIndex = i;
-                return true;
-            }
-        }
-        typeBits >>= 1;
-    }
-    return false;
-}
-
 void create_vulkan_DepthBuffer()
 {
     depthFormat = VK_FORMAT_D16_UNORM;
@@ -436,7 +420,7 @@ void create_vulkan_DepthBuffer()
     vkGetImageMemoryRequirements(device, depthImage, &mem_reqs);
     mem_alloc_info.allocationSize = mem_reqs.size;
     VkFlags requirements_mask = 0;
-    bool flag = memoryTypeFromProperties(memoryproperties, mem_reqs.memoryTypeBits, requirements_mask, &mem_alloc_info.memoryTypeIndex);
+    bool flag = memory_type_from_properties(memoryproperties, mem_reqs.memoryTypeBits, requirements_mask, &mem_alloc_info.memoryTypeIndex);
     assert(flag);
     printf("确定内存类型成功类型索引为%d\n", mem_alloc_info.memoryTypeIndex);
     result = vkAllocateMemory(device, &mem_alloc_info, NULL, &memDepth);
@@ -562,6 +546,11 @@ void createDrawableObject()
         -45, 0, 0, 0, 1, 0,
         45, 0, 0, 0, 0, 1};
     drawable = new DrawableObject(vdata, dataByteCount, vCount, device, memoryproperties);
+}
+
+void initPipeline()
+{
+    sqsCL = new ShaderQueueSuit(&device, renderPass, memoryproperties);
 }
 
 #ifdef _WIN32

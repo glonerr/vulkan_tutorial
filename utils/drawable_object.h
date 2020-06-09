@@ -1,6 +1,7 @@
 #ifndef DRAWABLE_OBJECT_H
 #define DRAWABLE_OBJECT_H
 #include "vulkan_wrapper.h"
+
 class DrawableObject
 {
     VkDevice *device;

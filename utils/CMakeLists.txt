@@ -1,4 +1,4 @@
-file(GLOB UTILS_SOURCE vulkan_manager.cpp vulkan_wrapper.cpp drawable_object.cpp)
+file(GLOB UTILS_SOURCE vulkan_manager.cpp vulkan_wrapper.cpp drawable_object.cpp shader_queue_suit.cpp utils.cpp)
 
 if(NOT WIN32)
         include(FindPkgConfig)
