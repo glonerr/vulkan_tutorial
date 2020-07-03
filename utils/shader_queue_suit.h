@@ -1,6 +1,11 @@
 #ifndef SHADER_QUEUE_SUIT_H
 #define SHADER_QUEUE_SUIT_H
+#ifdef USE_VULKAN_WRAPPER
 #include "vulkan_wrapper.h"
+#else
+#include <vulkan/vulkan.h>
+#endif
+#include "utils.h"
 #include <vector>
 class ShaderQueueSuit
 {
@@ -11,8 +16,9 @@ class ShaderQueueSuit
     VkVertexInputBindingDescription vertexBinding;
     VkVertexInputAttributeDescription vertexAttribs[2];
     VkPipelineCache pipelineCache;
-    VkDevice *device;
     VkDescriptorPool descPool;
+    window_info *info;
+
     void create_uniform_buffer(VkDevice &device,VkPhysicalDeviceMemoryProperties &memoryproperties);
     void destroy_uniform_buffer(VkDevice &device);
     void create_pipeline_layout(VkDevice &device);
@@ -31,7 +37,7 @@ public:
     std::vector<VkDescriptorSet> descSet;
     VkPipelineLayout pipelineLayout;
     VkPipeline pipeline;
-    ShaderQueueSuit(VkDevice *deviceIn, VkRenderPass &renderPass, VkPhysicalDeviceMemoryProperties &memoryroperties);
+    ShaderQueueSuit(VkRenderPass &renderPass, VkPhysicalDeviceMemoryProperties &memoryroperties,struct window_info &info);
     ~ShaderQueueSuit();
 };
 #endif

@@ -1,6 +1,10 @@
 #ifndef DRAWABLE_OBJECT_H
 #define DRAWABLE_OBJECT_H
+#ifdef USE_VULKAN_WRAPPER
 #include "vulkan_wrapper.h"
+#else
+#include <vulkan/vulkan.h>
+#endif
 
 class DrawableObject
 {

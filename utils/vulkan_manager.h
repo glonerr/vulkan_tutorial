@@ -1,64 +1,15 @@
 #ifndef VULKAN_MANAGER_H
 #define VULKAN_MANAGER_H
-#include "vulkan_wrapper.h" //for android a
+#ifdef USE_VULKAN_WRAPPER
+#include "vulkan_wrapper.h"
+#else
+#include <vulkan/vulkan.h>
+#endif
 #include "drawable_object.h"
 #include "shader_queue_suit.h"
 
 #include <vector>
 
-/*
- * Keep each of our swap chain buffers' image, command buffer and view in one
- * spot
- */
-typedef struct _swap_chain_buffers
-{
-    VkImage image;
-    VkImageView view;
-} swap_chain_buffer;
-
-/*
- * A layer can expose extensions, keep track of those
- * extensions here.
- */
-typedef struct
-{
-    VkLayerProperties properties;
-    std::vector<VkExtensionProperties> instance_extensions;
-    std::vector<VkExtensionProperties> device_extensions;
-} layer_properties;
-
-/*
- * Structure for tracking information used / created / modified
- * by utility functions.
- */
-struct window_info
-{
-#ifdef _WIN32
-#define APP_NAME_STR_LEN 80
-    HINSTANCE connection;        // hInstance - Windows Instance
-    char name[APP_NAME_STR_LEN]; // Name to put on the window/icon
-    HWND window;                 // hWnd - window handle
-#elif defined(VK_USE_PLATFORM_METAL_EXT)
-    void *caMetalLayer;
-#elif defined(__ANDROID__)
-    PFN_vkCreateAndroidSurfaceKHR fpCreateAndroidSurfaceKHR;
-#elif defined(VK_USE_PLATFORM_WAYLAND_KHR)
-    wl_display *display;
-    wl_registry *registry;
-    wl_compositor *compositor;
-    wl_surface *window;
-    wl_shell *shell;
-    wl_shell_surface *shell_surface;
-#else
-    xcb_connection_t *connection;
-    xcb_screen_t *screen;
-    xcb_window_t window;
-    xcb_intern_atom_reply_t *atom_wm_delete_window;
-#endif // _WIN32
-    int width, height;
-};
-
-std::vector<const char *> instanceExtensionNames;
 VkInstance instance;
 uint32_t gpuCount;
 std::vector<VkPhysicalDevice> gpus;
@@ -68,14 +19,11 @@ uint32_t queueGraphicsFamilyIndex;
 VkQueue queueGraphics;
 uint32_t queuePresentFamilyIndex;
 std::vector<const char *> deviceExtensionName;
-VkDevice device;
 VkCommandPool cmdPool;
 VkCommandBuffer cmdBuffer;
 VkCommandBufferBeginInfo cmd_buf_info;
 VkCommandBuffer cmd_bufs[1];
 VkSubmitInfo submit_info[1];
-uint32_t screenWidth;
-uint32_t screenHeight;
 VkSurfaceKHR surface;
 std::vector<VkFormat> formats;
 VkSurfaceCapabilitiesKHR surfCapabilities;
@@ -105,27 +53,34 @@ float xAngle;
 DrawableObject *drawable;
 ShaderQueueSuit *sqsCL;
 
+
+VkBool32 demo_check_layers(const std::vector<layer_properties> &layer_props, const std::vector<const char *> &layer_names);
 void init_window_size(struct window_info &info, int32_t default_width, int32_t default_height);
 void init_window(struct window_info &info);
 void init_connection(struct window_info &info);
 void destroy_window(struct window_info &info);
+void init_vulkan(struct window_info &info);
 
-void init_vulkan_instance();
+VkResult init_device_extension_properties(struct window_info &info, layer_properties &layer_props);
+VkResult init_global_layer_properties(struct window_info &info);
+
+void init_instance_extension_names(struct window_info &info);
+void init_vulkan_instance(struct window_info &info);
 void enumerate_vulkan_phy_device();
-void create_vulkan_device();
-void create_vulkan_CommandBuffer();
-void init_queue();
+void create_vulkan_device(struct window_info &info);
+void create_vulkan_CommandBuffer(struct window_info &info);
+void init_queue(struct window_info &info);
 void create_vulkan_swapchain(struct window_info &info);
-void create_vulkan_DepthBuffer();
-void create_render_pass();
-void create_frame_buffer();
-void createDrawableObject();
-void drawObject();
+void create_vulkan_DepthBuffer(struct window_info &info);
+void create_render_pass(struct window_info &info);
+void create_frame_buffer(struct window_info &info);
+void createDrawableObject(struct window_info &info);
+void drawObject(struct window_info &info);
 void doVulkan();
-void initPipeline();
-void createFence();
+void initPipeline(struct window_info &info);
+void createFence(struct window_info &info);
 void initPresentInfo();
-void initMatrix();
+void initMatrix(struct window_info &info);
 void flushUniformBuffer();
 void flushTexToDecSet();
 void destroy_window();

@@ -7,7 +7,8 @@
                 "${workspaceFolder}"
             ],
             "defines": [
-                "VK_USE_PLATFORM_XCB_KHR"
+                "VK_USE_PLATFORM_XCB_KHR",
+                "USE_VULKAN_WRAPPER"
             ],
             "compilerPath": "/usr/bin/clang",
             "cStandard": "c11",

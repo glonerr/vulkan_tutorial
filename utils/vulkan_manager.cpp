@@ -1,13 +1,183 @@
 #include "vulkan_manager.h"
-#include "utils.h"
+#include "MatrixState3D.h"
 #include <stdio.h>
 #include <assert.h>
 #include <stdlib.h>
 #include <iostream>
-void init_vulkan_instance()
+#include <string.h>
+
+/*
+ * Return 1 (true) if all layer names specified in check_names
+ * can be found in given layer properties.
+ */
+VkBool32 demo_check_layers(const std::vector<layer_properties> &layer_props, const std::vector<const char *> &layer_names)
 {
-    instanceExtensionNames.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
-    instanceExtensionNames.push_back(VK_KHR_XCB_SURFACE_EXTENSION_NAME);
+    uint32_t check_count = layer_names.size();
+    uint32_t layer_count = layer_props.size();
+    for (uint32_t i = 0; i < check_count; i++)
+    {
+        VkBool32 found = 0;
+        for (uint32_t j = 0; j < layer_count; j++)
+        {
+            if (!strcmp(layer_names[i], layer_props[j].properties.layerName))
+            {
+                found = 1;
+            }
+        }
+        if (!found)
+        {
+            std::cout << "Cannot find layer: " << layer_names[i] << std::endl;
+            return 0;
+        }
+    }
+    return 1;
+}
+
+VkResult init_device_extension_properties(struct window_info &info, layer_properties &layer_props)
+{
+    VkExtensionProperties *device_extensions;
+    uint32_t device_extension_count;
+    VkResult res;
+    char *layer_name = NULL;
+
+    layer_name = layer_props.properties.layerName;
+
+    do
+    {
+        res = vkEnumerateDeviceExtensionProperties(info.gpus[0], layer_name, &device_extension_count, NULL);
+        if (res)
+            return res;
+
+        if (device_extension_count == 0)
+        {
+            return VK_SUCCESS;
+        }
+
+        layer_props.device_extensions.resize(device_extension_count);
+        device_extensions = layer_props.device_extensions.data();
+        res = vkEnumerateDeviceExtensionProperties(info.gpus[0], layer_name, &device_extension_count, device_extensions);
+    } while (res == VK_INCOMPLETE);
+
+    return res;
+}
+
+/*
+ * TODO: function description here
+ */
+VkResult init_global_extension_properties(layer_properties &layer_props)
+{
+    VkExtensionProperties *instance_extensions;
+    uint32_t instance_extension_count;
+    VkResult res;
+    char *layer_name = NULL;
+
+    layer_name = layer_props.properties.layerName;
+
+    do
+    {
+        res = vkEnumerateInstanceExtensionProperties(layer_name, &instance_extension_count, NULL);
+        if (res)
+            return res;
+
+        if (instance_extension_count == 0)
+        {
+            return VK_SUCCESS;
+        }
+
+        layer_props.instance_extensions.resize(instance_extension_count);
+        instance_extensions = layer_props.instance_extensions.data();
+        res = vkEnumerateInstanceExtensionProperties(layer_name, &instance_extension_count, instance_extensions);
+    } while (res == VK_INCOMPLETE);
+
+    return res;
+}
+
+/*
+ * TODO: function description here
+ */
+VkResult init_global_layer_properties(struct window_info &info)
+{
+    uint32_t instance_layer_count;
+    VkLayerProperties *vk_props = NULL;
+    VkResult res;
+#ifdef __ANDROID__
+    // This place is the first place for samples to use Vulkan APIs.
+    // Here, we are going to open Vulkan.so on the device and retrieve function pointers using
+    // vulkan_wrapper helper.
+    if (!InitVulkan())
+    {
+        LOGE("Failied initializing Vulkan APIs!");
+        return VK_ERROR_INITIALIZATION_FAILED;
+    }
+    LOGI("Loaded Vulkan APIs.");
+#endif
+
+    /*
+     * It's possible, though very rare, that the number of
+     * instance layers could change. For example, installing something
+     * could include new layers that the loader would pick up
+     * between the initial query for the count and the
+     * request for VkLayerProperties. The loader indicates that
+     * by returning a VK_INCOMPLETE status and will update the
+     * the count parameter.
+     * The count parameter will be updated with the number of
+     * entries loaded into the data pointer - in case the number
+     * of layers went down or is smaller than the size given.
+     */
+    do
+    {
+        res = vkEnumerateInstanceLayerProperties(&instance_layer_count, NULL);
+        printf("instance_layer_count:%d\n", instance_layer_count);
+        if (res)
+            return res;
+
+        if (instance_layer_count == 0)
+        {
+            return VK_SUCCESS;
+        }
+
+        vk_props = (VkLayerProperties *)realloc(vk_props, instance_layer_count * sizeof(VkLayerProperties));
+
+        res = vkEnumerateInstanceLayerProperties(&instance_layer_count, vk_props);
+    } while (res == VK_INCOMPLETE);
+
+    /*
+     * Now gather the extension list for each instance layer.
+     */
+    for (uint32_t i = 0; i < instance_layer_count; i++)
+    {
+        layer_properties layer_props;
+        layer_props.properties = vk_props[i];
+        res = init_global_extension_properties(layer_props);
+        if (res)
+            return res;
+        info.instance_layer_properties.push_back(layer_props);
+    }
+    free(vk_props);
+
+    return res;
+}
+
+void init_instance_extension_names(struct window_info &info)
+{
+    info.instance_extension_names.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
+#ifdef __ANDROID__
+    info.instance_extension_names.push_back(VK_KHR_ANDROID_SURFACE_EXTENSION_NAME);
+#elif defined(_WIN32)
+    info.instance_extension_names.push_back(VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
+#elif defined(VK_USE_PLATFORM_METAL_EXT)
+    info.instance_extension_names.push_back(VK_EXT_METAL_SURFACE_EXTENSION_NAME);
+#elif defined(VK_USE_PLATFORM_WAYLAND_KHR)
+    info.instance_extension_names.push_back(VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME);
+#else
+    info.instance_extension_names.push_back(VK_KHR_XCB_SURFACE_EXTENSION_NAME);
+#endif
+}
+
+void init_vulkan_instance(struct window_info &info)
+{
+    info.instance_extension_names.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
+    info.instance_extension_names.push_back(VK_KHR_XCB_SURFACE_EXTENSION_NAME);
 
     VkApplicationInfo app_info = {};
     app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -23,10 +193,10 @@ void init_vulkan_instance()
     inst_info.pNext = NULL;
     inst_info.flags = 0;
     inst_info.pApplicationInfo = &app_info;
-    inst_info.enabledExtensionCount = instanceExtensionNames.size();
-    inst_info.ppEnabledExtensionNames = instanceExtensionNames.data();
-    inst_info.enabledLayerCount = 0;
-    inst_info.ppEnabledLayerNames = NULL;
+    inst_info.enabledExtensionCount = info.instance_extension_names.size();
+    inst_info.ppEnabledExtensionNames = info.instance_extension_names.data();
+    inst_info.enabledLayerCount = info.instance_layer_names.size();
+    inst_info.ppEnabledLayerNames = info.instance_layer_names.data();
     VkResult result;
     result = vkCreateInstance(&inst_info, NULL, &instance);
     if (result == VK_SUCCESS)
@@ -51,7 +221,7 @@ void enumerate_vulkan_phy_device()
     vkGetPhysicalDeviceMemoryProperties(gpus[0], &memoryproperties);
 }
 
-void create_vulkan_device()
+void create_vulkan_device(struct window_info &info)
 {
     vkGetPhysicalDeviceQueueFamilyProperties(gpus[0], &queueFamilyCount, NULL);
     printf("Vulkan硬件设备0支持的队列家族数量%d个\n", queueFamilyCount);
@@ -90,18 +260,18 @@ void create_vulkan_device()
     deviceInfo.enabledLayerCount = 0;
     deviceInfo.ppEnabledLayerNames = NULL;
     deviceInfo.pEnabledFeatures = NULL;
-    VkResult result = vkCreateDevice(gpus[0], &deviceInfo, NULL, &device);
+    VkResult result = vkCreateDevice(gpus[0], &deviceInfo, NULL, &info.device);
     assert(result == VK_SUCCESS);
 }
 
-void create_vulkan_CommandBuffer()
+void create_vulkan_CommandBuffer(struct window_info &info)
 {
     VkCommandPoolCreateInfo cmd_pool_info = {};
     cmd_pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     cmd_pool_info.pNext = NULL;
     cmd_pool_info.queueFamilyIndex = queueGraphicsFamilyIndex;
     cmd_pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    VkResult result = vkCreateCommandPool(device, &cmd_pool_info, NULL, &cmdPool);
+    VkResult result = vkCreateCommandPool(info.device, &cmd_pool_info, NULL, &cmdPool);
     assert(result == VK_SUCCESS);
     VkCommandBufferAllocateInfo cmdBAI = {};
     cmdBAI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -109,7 +279,7 @@ void create_vulkan_CommandBuffer()
     cmdBAI.commandPool = cmdPool;
     cmdBAI.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     cmdBAI.commandBufferCount = 1;
-    result = vkAllocateCommandBuffers(device, &cmdBAI, &cmdBuffer);
+    result = vkAllocateCommandBuffers(info.device, &cmdBAI, &cmdBuffer);
     assert(result == VK_SUCCESS);
     cmd_buf_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     cmd_buf_info.pNext = NULL;
@@ -127,9 +297,9 @@ void create_vulkan_CommandBuffer()
     printf("创建命令缓冲\n");
 }
 
-void init_queue()
+void init_queue(struct window_info &info)
 {
-    vkGetDeviceQueue(device, queueGraphicsFamilyIndex, 0, &queueGraphics);
+    vkGetDeviceQueue(info.device, queueGraphicsFamilyIndex, 0, &queueGraphics);
 }
 
 void create_vulkan_swapchain(struct window_info &info)
@@ -255,8 +425,8 @@ void create_vulkan_swapchain(struct window_info &info)
     }
     if (surfCapabilities.currentExtent.width == 0xFFFFFFFF)
     {
-        swapchainExtent.width = screenWidth;
-        swapchainExtent.height = screenHeight;
+        swapchainExtent.width = info.width;
+        swapchainExtent.height = info.height;
         if (swapchainExtent.width < surfCapabilities.minImageExtent.width)
         {
             swapchainExtent.width = surfCapabilities.minImageExtent.width;
@@ -281,8 +451,8 @@ void create_vulkan_swapchain(struct window_info &info)
         swapchainExtent = surfCapabilities.currentExtent;
         printf("使用获取能力中的宽度 %d 高度 %d\n", swapchainExtent.width, swapchainExtent.height);
     }
-    screenWidth = swapchainExtent.width;
-    screenHeight = swapchainExtent.height;
+    info.width = swapchainExtent.width;
+    info.height = swapchainExtent.height;
     uint32_t desiredMinNumberOfSwachainImages = surfCapabilities.minImageCount + 1;
     if ((surfCapabilities.maxImageCount > 0) && desiredMinNumberOfSwachainImages > surfCapabilities.maxImageCount)
     {
@@ -323,13 +493,13 @@ void create_vulkan_swapchain(struct window_info &info)
         uint32_t queueFamilyIndics[2] = {queueGraphicsFamilyIndex, queuePresentFamilyIndex};
         swapchain_ci.pQueueFamilyIndices = queueFamilyIndics;
     }
-    result = vkCreateSwapchainKHR(device, &swapchain_ci, NULL, &swapChain);
+    result = vkCreateSwapchainKHR(info.device, &swapchain_ci, NULL, &swapChain);
     assert(result == VK_SUCCESS);
-    result = vkGetSwapchainImagesKHR(device, swapChain, &swapchainImageCount, NULL);
+    result = vkGetSwapchainImagesKHR(info.device, swapChain, &swapchainImageCount, NULL);
     assert(result == VK_SUCCESS);
     printf("交换链图像数量:%d\n", swapchainImageCount);
     swapchainImages.resize(swapchainImageCount);
-    result = vkGetSwapchainImagesKHR(device, swapChain, &swapchainImageCount, swapchainImages.data());
+    result = vkGetSwapchainImagesKHR(info.device, swapChain, &swapchainImageCount, swapchainImages.data());
     printf("交换链图像单张大小:%ld\n", sizeof(swapchainImages[0]));
     assert(result == VK_SUCCESS);
     swapchainImageViews.resize(swapchainImageCount);
@@ -348,15 +518,15 @@ void create_vulkan_swapchain(struct window_info &info)
         image_view_ci.components.a = VK_COMPONENT_SWIZZLE_A;
         image_view_ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         image_view_ci.subresourceRange.baseMipLevel = 0;
-        image_view_ci.subresourceRange.layerCount = 1;
+        image_view_ci.subresourceRange.levelCount = 1;
         image_view_ci.subresourceRange.baseArrayLayer = 0;
         image_view_ci.subresourceRange.layerCount = 1;
-        result = vkCreateImageView(device, &image_view_ci, NULL, &swapchainImageViews[i]);
+        result = vkCreateImageView(info.device, &image_view_ci, NULL, &swapchainImageViews[i]);
         assert(result == VK_SUCCESS);
     }
 }
 
-void create_vulkan_DepthBuffer()
+void create_vulkan_DepthBuffer(struct window_info &info)
 {
     depthFormat = VK_FORMAT_D16_UNORM;
     VkImageCreateInfo image_ci = {};
@@ -379,8 +549,8 @@ void create_vulkan_DepthBuffer()
     image_ci.pNext = NULL;
     image_ci.imageType = VK_IMAGE_TYPE_2D;
     image_ci.format = depthFormat;
-    image_ci.extent.width = screenWidth;
-    image_ci.extent.height = screenHeight;
+    image_ci.extent.width = info.width;
+    image_ci.extent.height = info.height;
     image_ci.extent.depth = 1;
     image_ci.mipLevels = 1;
     image_ci.arrayLayers = 1;
@@ -414,31 +584,31 @@ void create_vulkan_DepthBuffer()
     depth_view_ci.subresourceRange.layerCount = 1;
     depth_view_ci.viewType = VK_IMAGE_VIEW_TYPE_2D;
     depth_view_ci.flags = 0;
-    VkResult result = vkCreateImage(device, &image_ci, NULL, &depthImage);
+    VkResult result = vkCreateImage(info.device, &image_ci, NULL, &depthImage);
     assert(result == VK_SUCCESS);
     VkMemoryRequirements mem_reqs;
-    vkGetImageMemoryRequirements(device, depthImage, &mem_reqs);
+    vkGetImageMemoryRequirements(info.device, depthImage, &mem_reqs);
     mem_alloc_info.allocationSize = mem_reqs.size;
     VkFlags requirements_mask = 0;
     bool flag = memory_type_from_properties(memoryproperties, mem_reqs.memoryTypeBits, requirements_mask, &mem_alloc_info.memoryTypeIndex);
     assert(flag);
     printf("确定内存类型成功类型索引为%d\n", mem_alloc_info.memoryTypeIndex);
-    result = vkAllocateMemory(device, &mem_alloc_info, NULL, &memDepth);
+    result = vkAllocateMemory(info.device, &mem_alloc_info, NULL, &memDepth);
     assert(result == VK_SUCCESS);
-    result = vkBindImageMemory(device, depthImage, memDepth, 0);
+    result = vkBindImageMemory(info.device, depthImage, memDepth, 0);
     assert(result == VK_SUCCESS);
     depth_view_ci.image = depthImage;
-    result = vkCreateImageView(device, &depth_view_ci, NULL, &depthImageView);
+    result = vkCreateImageView(info.device, &depth_view_ci, NULL, &depthImageView);
     assert(result == VK_SUCCESS);
 }
 
-void create_render_pass()
+void create_render_pass(struct window_info &info)
 {
     VkSemaphoreCreateInfo semaphore_ci = {};
     semaphore_ci.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO; // image required semaphore
     semaphore_ci.pNext = NULL;
     semaphore_ci.flags = 0;
-    VkResult result = vkCreateSemaphore(device, &semaphore_ci, NULL, &imageAcquiredSemaphore);
+    VkResult result = vkCreateSemaphore(info.device, &semaphore_ci, NULL, &imageAcquiredSemaphore);
     assert(result == VK_SUCCESS);
     VkAttachmentDescription attachments_desc[2];
     attachments_desc[0].format = formats[0];
@@ -491,7 +661,7 @@ void create_render_pass()
     render_pass_ci.dependencyCount = 0;
     render_pass_ci.pDependencies = NULL;
 
-    result = vkCreateRenderPass(device, &render_pass_ci, NULL, &renderPass);
+    result = vkCreateRenderPass(info.device, &render_pass_ci, NULL, &renderPass);
     assert(result == VK_SUCCESS);
 
     clear_values[0].color.float32[0] = 0.2f;
@@ -507,13 +677,13 @@ void create_render_pass()
     rp_begin_ci.renderPass = renderPass;
     rp_begin_ci.renderArea.offset.x = 0;
     rp_begin_ci.renderArea.offset.y = 0;
-    rp_begin_ci.renderArea.extent.width = screenWidth;
-    rp_begin_ci.renderArea.extent.height = screenHeight;
+    rp_begin_ci.renderArea.extent.width = info.width;
+    rp_begin_ci.renderArea.extent.height = info.height;
     rp_begin_ci.clearValueCount = 2;
     rp_begin_ci.pClearValues = clear_values;
 }
 
-void create_frame_buffer()
+void create_frame_buffer(struct window_info &info)
 {
     VkImageView attachments_iv[2];
     attachments_iv[1] = depthImageView;
@@ -523,21 +693,21 @@ void create_frame_buffer()
     frame_buffer_ci.renderPass = renderPass;
     frame_buffer_ci.attachmentCount = 2;
     frame_buffer_ci.pAttachments = attachments_iv;
-    frame_buffer_ci.width = screenWidth;
-    frame_buffer_ci.height = screenHeight;
+    frame_buffer_ci.width = info.width;
+    frame_buffer_ci.height = info.height;
     frame_buffer_ci.layers = 1;
     framebuffers = (VkFramebuffer *)malloc(swapchainImageCount * sizeof(VkFramebuffer));
     assert(framebuffers);
     for (size_t i = 0; i < swapchainImageCount; i++)
     {
         attachments_iv[0] = swapchainImageViews[i];
-        VkResult result = vkCreateFramebuffer(device, &frame_buffer_ci, NULL, &framebuffers[i]);
+        VkResult result = vkCreateFramebuffer(info.device, &frame_buffer_ci, NULL, &framebuffers[i]);
         assert(result == VK_SUCCESS);
         printf("创建帧缓冲%ld成功\n", i);
     }
 }
 
-void createDrawableObject()
+void createDrawableObject(struct window_info &info)
 {
     int vCount = 3;
     int dataByteCount = vCount * 6 * sizeof(float);
@@ -545,12 +715,12 @@ void createDrawableObject()
         0, 75, 0, 1, 0, 0,
         -45, 0, 0, 0, 1, 0,
         45, 0, 0, 0, 0, 1};
-    drawable = new DrawableObject(vdata, dataByteCount, vCount, device, memoryproperties);
+    drawable = new DrawableObject(vdata, dataByteCount, vCount, info.device, memoryproperties);
 }
 
-void initPipeline()
+void initPipeline(struct window_info &info)
 {
-    sqsCL = new ShaderQueueSuit(&device, renderPass, memoryproperties);
+    sqsCL = new ShaderQueueSuit(renderPass, memoryproperties, info);
 }
 
 #ifdef _WIN32
@@ -787,4 +957,49 @@ void init_connection(struct window_info &info)
     wl_registry_add_listener(info.registry, &registry_listener, &info);
     wl_display_dispatch(info.display);
 #endif
+}
+
+void init_vulkan(struct window_info &info)
+{
+    // #ifdef USE_VULKAN_WRAPPER
+    InitVulkan();
+    // #endif
+}
+
+void createFence(struct window_info &info)
+{
+    VkFenceCreateInfo fence_ci = {VK_STRUCTURE_TYPE_EXPORT_FENCE_CREATE_INFO, NULL, 0};
+    vkCreateFence(info.device, &fence_ci, NULL, &taskFinishFench);
+}
+
+void initPresentInfo()
+{
+    present.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    present.pNext = NULL;
+    present.swapchainCount = 1;
+    present.pSwapchains = &swapChain;
+    present.waitSemaphoreCount = 0;
+    present.pWaitSemaphores = NULL;
+    present.pResults = NULL;
+}
+
+void initMatrix(struct window_info &info)
+{
+    MatrixState3D::setCamera(0, 0, 200, 0, 0, 0, 0, 1, 0);
+    MatrixState3D::setInitStack();
+    float ratio = (float)info.width / (float)info.height;
+    MatrixState3D::setProjectFrustum(-ratio, ratio, -1, 1, 1.5f, 1000);
+}
+
+bool loopDrawFlag = true;
+
+void drawObject(struct window_info &info)
+{
+    while (loopDrawFlag)
+    {
+        VkResult result = vkAcquireNextImageKHR(info.device, swapChain, UINT64_MAX, imageAcquiredSemaphore, VK_NULL_HANDLE, &currentBuffer);
+        assert(result == VK_SUCCESS);
+        rp_begin_ci.framebuffer = framebuffers[currentBuffer];
+        vkResetCommandBuffer(cmdBuffer, 0);
+    }
 }

@@ -1,4 +1,4 @@
-file(GLOB UTILS_SOURCE vulkan_manager.cpp vulkan_wrapper.cpp drawable_object.cpp shader_queue_suit.cpp utils.cpp)
+file(GLOB UTILS_SOURCE vulkan_manager.cpp vulkan_wrapper.cpp drawable_object.cpp shader_queue_suit.cpp utils.cpp MatrixState3D.cpp)
 
 if(NOT WIN32)
         include(FindPkgConfig)
@@ -16,6 +16,8 @@ if(NOT WIN32)
                 find_package(XCB REQUIRED)
         endif()
 endif()
+
+add_definitions(-DUSE_VULKAN_WRAPPER)
 
 include_directories(${XCB_INCLUDE_DIRS})
 
